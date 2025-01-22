@@ -287,7 +287,10 @@ func (d *Daemon) init(listenAddress string, socketGroup string, heartbeatInterva
 		return fmt.Errorf("Failed to initialize trust store: %w", err)
 	}
 
-	d.db = db.NewDB(d.shutdownCtx, d.ServerCert, d.ClusterCert, d.Name, d.os, heartbeatInterval)
+	d.db, err = db.NewDB(d.shutdownCtx, d.ServerCert, d.ClusterCert, d.Name, d.os, heartbeatInterval)
+	if err != nil {
+		return fmt.Errorf("Failed to initialize database: %w", err)
+	}
 
 	listenAddr := api.NewURL()
 	if listenAddress != "" {
@@ -346,9 +349,15 @@ func (d *Daemon) init(listenAddress string, socketGroup string, heartbeatInterva
 
 	d.db.SetSchema(schemaExtensions, d.Extensions)
 
-	err = d.reloadIfBootstrapped()
-	if err != nil {
-		return err
+	status := d.db.Status()
+	if status == types.DatabaseStarting {
+		// Database is already bootstrapped, reload the daemon to ensure the latest configuration is applied.
+		err := d.reload()
+		if err != nil {
+			return fmt.Errorf("Failed to reload daemon: %w", err)
+		}
+	} else if status == types.DatabaseNotReady {
+		logger.Warn("Microcluster database is uninitialized")
 	}
 
 	err = d.trustStore.Refresh()
@@ -430,28 +439,8 @@ func (d *Daemon) applyHooks(hooks *state.Hooks) error {
 	return nil
 }
 
-func (d *Daemon) reloadIfBootstrapped() error {
-	_, err := os.Stat(filepath.Join(d.os.DatabaseDir, "info.yaml"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			logger.Warn("microcluster database is uninitialized")
-			return nil
-		}
-
-		return err
-	}
-
-	_, err = os.Stat(filepath.Join(d.os.StateDir, "daemon.yaml"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			logger.Warn("microcluster daemon config is missing")
-			return nil
-		}
-
-		return err
-	}
-
-	err = d.config.Load()
+func (d *Daemon) reload() error {
+	err := d.config.Load()
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve daemon configuration yaml: %w", err)
 	}
