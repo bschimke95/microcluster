@@ -79,7 +79,6 @@ type Args struct {
 
 // Daemon holds information for the microcluster daemon.
 type Daemon struct {
-	project string // The project refers to the name of the go-project that is calling MicroCluster.
 	version string // The version of the go-project that is calling MicroCluster
 
 	config *internalConfig.DaemonConfig // Local daemon's configuration from daemon.yaml file.
@@ -115,12 +114,11 @@ type Daemon struct {
 }
 
 // NewDaemon initializes the Daemon context and channels.
-func NewDaemon(project string) *Daemon {
+func NewDaemon() *Daemon {
 	d := &Daemon{
 		shutdownDoneCh:   make(chan error),
 		ReadyChan:        make(chan struct{}),
 		extensionServers: make(map[string]rest.Server),
-		project:          project,
 	}
 
 	d.stop = sync.OnceValue(func() error {
@@ -137,7 +135,8 @@ func NewDaemon(project string) *Daemon {
 		}
 
 		if d.endpoints != nil {
-			err := d.endpoints.Down()
+			// Stop the listeners and shutdown the underlying servers.
+			err := d.endpoints.Down(true)
 			if err != nil {
 				return err
 			}
@@ -350,13 +349,15 @@ func (d *Daemon) init(listenAddress string, socketGroup string, heartbeatInterva
 	d.db.SetSchema(schemaExtensions, d.Extensions)
 
 	status := d.db.Status()
-	if status == types.DatabaseStarting {
+	switch status {
+	case types.DatabaseStarting:
 		// Database is already bootstrapped, reload the daemon to ensure the latest configuration is applied.
 		err := d.reload()
 		if err != nil {
 			return fmt.Errorf("Failed to reload daemon: %w", err)
 		}
-	} else if status == types.DatabaseNotReady {
+
+	case types.DatabaseNotReady:
 		logger.Warn("Microcluster database is uninitialized")
 	}
 
@@ -575,7 +576,9 @@ func (d *Daemon) StartAPI(ctx context.Context, bootstrap bool, initConfig map[st
 
 	d.extensionServersMu.RUnlock()
 
-	err = d.endpoints.Down(endpoints.EndpointNetwork)
+	// Close the listener but don't shutdown the underlying server.
+	// This allows staying connected with the API during the join procedure.
+	err = d.endpoints.Down(false, endpoints.EndpointNetwork)
 	if err != nil {
 		return err
 	}
@@ -604,7 +607,7 @@ func (d *Daemon) StartAPI(ctx context.Context, bootstrap bool, initConfig map[st
 
 		clusterMember.SchemaInternal, clusterMember.SchemaExternal, _ = d.db.Schema().Version()
 
-		err = d.db.Bootstrap(d.Extensions, d.project, *d.Address(), clusterMember)
+		err = d.db.Bootstrap(d.Extensions, *d.Address(), clusterMember)
 		if err != nil {
 			return err
 		}
@@ -626,12 +629,12 @@ func (d *Daemon) StartAPI(ctx context.Context, bootstrap bool, initConfig map[st
 	}
 
 	if len(joinAddresses) != 0 {
-		err = d.db.Join(d.Extensions, d.project, *d.Address(), joinAddresses...)
+		err = d.db.Join(d.Extensions, *d.Address(), joinAddresses...)
 		if err != nil {
 			return fmt.Errorf("Failed to join cluster: %w", err)
 		}
 	} else {
-		err = d.db.StartWithCluster(d.Extensions, d.project, *d.Address(), d.trustStore.Remotes().Addresses())
+		err = d.db.StartWithCluster(d.Extensions, *d.Address(), d.trustStore.Remotes().Addresses())
 		if err != nil {
 			return fmt.Errorf("Failed to re-establish cluster connection: %w", err)
 		}
@@ -774,7 +777,9 @@ func (d *Daemon) UpdateServers() error {
 			d.extensionServers[serverName] = extensionServer
 			d.extensionServersMu.Unlock()
 
-			err := d.endpoints.DownByName(serverName)
+			// Stop the listener and shutdown the underlying server.
+			// Any active connections will be dropped at this point.
+			err := d.endpoints.DownByName(true, serverName)
 			if err != nil {
 				return err
 			}
@@ -805,7 +810,8 @@ func (d *Daemon) UpdateServers() error {
 
 		// Stop the additional listener in case it got modified.
 		if modified {
-			err := d.endpoints.DownByName(serverName)
+			// Don't shutdown the underlying server to keep active connections intact.
+			err := d.endpoints.DownByName(false, serverName)
 			if err != nil {
 				return err
 			}
@@ -953,7 +959,7 @@ func (d *Daemon) sendUpgradeNotification(ctx context.Context, c *client.Client) 
 	upgradeRequest.Header.Set("X-Dqlite-Version", fmt.Sprintf("%d", 1))
 	upgradeRequest = upgradeRequest.WithContext(ctx)
 
-	resp, err := c.Client.Do(upgradeRequest)
+	resp, err := c.Do(upgradeRequest)
 	if err != nil {
 		logger.Error("Failed to send database upgrade request", logger.Ctx{"error": err})
 		return nil
@@ -1127,7 +1133,8 @@ func (d *Daemon) State() state.State {
 				return err
 			}
 
-			return d.endpoints.Down()
+			// Close the listeners and shutdown the underlying servers.
+			return d.endpoints.Down(true)
 		},
 	}
 
