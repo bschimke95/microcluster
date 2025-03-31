@@ -4,7 +4,7 @@ When a new build of a project that uses Microcluster introduces logical changes 
 
 ## Schema updates
 
-The [app.Start function](https://github.com/canonical/microcluster/blob/v3/microcluster/app.go#L69-L92) accepts as an argument a list of functions that are run in sequence. These functions supply a database transaction that can be used to extend or modify the schema of the Dqlite database used by Microcluster. The order of the functions in this list must not change. New updates must be added to the end of the list, in the order to be executed.
+The [app.Start function](https://github.com/canonical/microcluster/blob/v2/microcluster/app.go#L69-L92) accepts as an argument a list of functions that are run in sequence. These functions supply a database transaction that can be used to extend or modify the schema of the Dqlite database used by Microcluster. The order of the functions in this list must not change. New updates must be added to the end of the list, in the order to be executed.
 
 A schema version is maintained per cluster member, representing the sum-total of updates that the member is locally aware of.
 
@@ -19,11 +19,11 @@ var SchemaExtensions = []schema.Update{
 }
 ```
 
-You can see this code in use within [the example package](https://github.com/canonical/microcluster/blob/v3/example/database/extended_schema.go#L11-L16).
+You can see this code in use within [the example package](https://github.com/canonical/microcluster/blob/v2/example/database/extended_schema.go#L11-L16).
 
 ## API extensions
 
-The [app.Start function](https://github.com/canonical/microcluster/blob/v3/microcluster/app.go#L69-L92) accepts as argument a `[]string` that is interpreted as an ordered list of labels corresponding to changes to the API. Do not change the order of this list.
+The [app.Start function](https://github.com/canonical/microcluster/blob/v2/microcluster/app.go#L69-L92) accepts as argument a `[]string` that is interpreted as an ordered list of labels corresponding to changes to the API. Do not change the order of this list.
 
 ### Example
 
@@ -40,7 +40,7 @@ func Extensions() []string {
 }
 ```
 
-You can see this code in use within [the example package](https://github.com/canonical/microcluster/blob/v3/example/api/extensions.go).
+You can see this code in use within [the example package](https://github.com/canonical/microcluster/blob/v2/example/api/extensions.go).
 
 ## Upgrade behavior
 

@@ -87,7 +87,7 @@ if err != nil {
 
 ### Lifecycle actions (hooks)
 
-The complete set of Microcluster hooks and their behaviors are defined [in this Go file](https://github.com/canonical/microcluster/blob/v3/internal/state/hooks.go).
+The complete set of Microcluster hooks and their behaviors are defined [in this Go file](https://github.com/canonical/microcluster/blob/v2/internal/state/hooks.go).
 
 Example using the `OnStart` hook:
 
