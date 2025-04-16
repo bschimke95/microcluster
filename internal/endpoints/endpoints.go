@@ -105,19 +105,23 @@ func (e *Endpoints) Down(shutdown bool, types ...EndpointType) error {
 
 	for name, endpoint := range e.listeners {
 		remove := false
+		logger.Infof("Closing endpoint %q of type %s", name, endpoint.Type())
 		for _, endpointType := range types {
 			if endpoint.Type() == endpointType {
+				logger.Infof("Endpoint %q of type %s - remove true", name, endpoint.Type())
 				remove = true
 			}
 		}
 
 		if types == nil || remove {
+			logger.Infof("Closing endpoint %q of type %s", name, endpoint.Type())
 			err := endpoint.Close()
 			if err != nil {
 				return err
 			}
 
 			if shutdown {
+				logger.Infof("Shutting down endpoint %q", name)
 				err = endpoint.Shutdown()
 				if err != nil {
 					return err
@@ -126,6 +130,7 @@ func (e *Endpoints) Down(shutdown bool, types ...EndpointType) error {
 
 			// Delete the stopped endpoint from the slice.
 			delete(e.listeners, name)
+			logger.Infof("Removed endpoint %q from listeners", name)
 		}
 	}
 

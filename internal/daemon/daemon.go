@@ -1128,11 +1128,12 @@ func (d *Daemon) State() state.State {
 			return exit, stopErr
 		},
 		StopListeners: func() error {
+			logger.Info("Stopping all listeners")
 			err := d.fsWatcher.Close()
 			if err != nil {
 				return err
 			}
-
+			logger.Info("Stopping endpoints")
 			// Close the listeners and shutdown the underlying servers.
 			return d.endpoints.Down(true)
 		},
