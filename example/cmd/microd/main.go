@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -140,7 +141,7 @@ func (c *cmdDaemon) run(cmd *cobra.Command, args []string) error {
 			logger.Info("This is a hook that runs after the daemon is initialized and joins an existing cluster, after OnNewMember runs on all peers")
 			logger.Info("Here are the extra configuration keys that were passed into the init --join command", logCtx)
 
-			return nil
+			return fmt.Errorf("this is a test error")
 		},
 
 		// PreJoin is run after the daemon is initialized and joins a cluster.

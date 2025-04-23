@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -ex
+
+~/go/bin/microd --state-dir /tmp/mc1 & proc1=$!                           
+~/go/bin/microd --state-dir /tmp/mc2 & proc2=$!
+
+trap 'kill "$proc1" "$proc2"; rm -rf /tmp/mc1 /tmp/mc2' INT TERM EXIT
+
+sleep 2
+~/go/bin/microctl --state-dir /tmp/mc1 init mc1 127.0.0.1:9001 --bootstrap
+
+sleep 10
+token=$(~/go/bin/microctl --state-dir /tmp/mc1 tokens add mc2)            
+~/go/bin/microctl --state-dir /tmp/mc2 init mc2 127.0.0.1:9002 --token "$token"
